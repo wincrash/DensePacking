@@ -28,8 +28,9 @@ void Time::Processing()
     if(data->simConstants.maxOverlap<data->simConstants.overlap_limit)
   {
     data->WRITE_RESULTS=true;
-  }else
-  {
-    data->WRITE_RESULTS=false;
   }
+  // else
+  // {
+  //   data->WRITE_RESULTS=false;
+  // }
 }

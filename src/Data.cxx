@@ -12,6 +12,8 @@ void Data::initialize()
     this->WALL_MAX.y = wmax_node[1];
     this->WALL_MAX.z = wmax_node[2];
 
+    this->cylinder_radius= yaml.ReadDouble("constrains", "cylinder_radius");
+
     this->simConstants.radius_scale_delta=yaml.ReadDouble("simulation","radius_scale_delta");
     this->simConstants.overlap_limit=yaml.ReadDouble("simulation","overlap_limit");
     this->simConstants.relaxation_coefficient=yaml.ReadDouble("simulation","relaxation_coefficient");

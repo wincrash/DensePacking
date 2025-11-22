@@ -20,6 +20,7 @@ public:
   bool PRINT_TIMES = true;
   Vec3 WALL_MIN;
   Vec3 WALL_MAX;
+  double cylinder_radius=1E12;
   int PARTICLE_COUNT = 0;
 
   void initialize();

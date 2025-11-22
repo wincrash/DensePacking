@@ -82,9 +82,15 @@ void Writer::Processing()
   fixArray->SetNumberOfComponents(1);
   fixArray->SetNumberOfTuples(N);
 
+  auto coordNRArray = vtkSmartPointer<vtkIntArray>::New();
+  coordNRArray->SetName("COORDINATION_NUMBER");
+  coordNRArray->SetNumberOfComponents(1);
+  coordNRArray->SetNumberOfTuples(N);
+
 
   for (int i = 0; i < N; ++i)
   {
+    
     Vec3 pos = POSITION(i);
     points->InsertNextPoint(pos.x, pos.y, pos.z);
     Vec3 vel = VELOCITY(i);
@@ -99,7 +105,7 @@ void Writer::Processing()
     // cells->InsertCellPoint(i);
   }
     // polyData->SetVerts(cells);
-
+std::vector<int> cnumber(N,0);
   for(int i=0;i<N;i++)
   {
     int kiekis=NN_COUNT[i];
@@ -112,15 +118,22 @@ void Writer::Processing()
       Vec3 P2=POSITION(pid);
       double R2=RADIUS(pid);
       double overlapas=R1+R2-(P1-P2).length();
-      if(overlapas>0)
+      if(overlapas>-data->simConstants.maxOverlap)
       {
         cells->InsertNextCell(2);
         cells->InsertCellPoint(i);
         cells->InsertCellPoint(pid);
+        cnumber[i]++;
+        cnumber[pid]++;
+
       }
     }
   }
 
+    for(int i=0;i<N;i++)
+  {
+    coordNRArray->SetTuple1(i,cnumber[i]);
+  }
 
   polyData->SetLines(cells);
   polyData->SetPoints(points);
@@ -130,6 +143,7 @@ void Writer::Processing()
   polyData->GetPointData()->AddArray(nnCountArray);
   polyData->GetPointData()->AddArray(fixArray);
   polyData->GetPointData()->AddArray(MAX_OVERLAPArray);
+  polyData->GetPointData()->AddArray(coordNRArray);
 
   Vec3 min = data->WALL_MIN;
   Vec3 max = data->WALL_MAX;
