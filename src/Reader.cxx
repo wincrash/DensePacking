@@ -73,7 +73,7 @@ data->MAX_OVERLAP = Kokkos::View<double *>("MAX_OVERLAP", data->PARTICLE_COUNT);
     double p[3];
     points->GetPoint(i, p);
     double r = radiusArray->GetTuple1(i);
-
+    r=r*data->simConstants.initial_scale;
     POSITION_host(i) = Vec3(p[0], p[1], p[2]);
 
     RADIUS_host(i) = r;

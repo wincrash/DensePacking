@@ -8,6 +8,7 @@ namespace Constants
 
 struct SimulationConstants
 {
+    double initial_scale=1.0;
     double radius_scale_delta_current=0;
     double radius_scale_delta;
     double overlap_limit;

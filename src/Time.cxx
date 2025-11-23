@@ -25,10 +25,10 @@ void Time::Processing()
   data->CONTACT_SEARCH = (data->cstep % this->CONTACT_SEARCH_SKIP == 0);
   data->WRITE_RESULTS = (data->cstep % this->WRITE_RESULTS_SKIP == 0);
   data->COMPUTE = (data->cstep <= this->END);
-    if(data->simConstants.maxOverlap<data->simConstants.overlap_limit)
-  {
-    data->WRITE_RESULTS=true;
-  }
+  //   if(data->simConstants.maxOverlap<data->simConstants.overlap_limit)
+  // {
+  //   data->WRITE_RESULTS=true;
+  // }
   // else
   // {
   //   data->WRITE_RESULTS=false;

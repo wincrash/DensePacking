@@ -18,6 +18,10 @@ void Data::initialize()
     this->simConstants.overlap_limit=yaml.ReadDouble("simulation","overlap_limit");
     this->simConstants.relaxation_coefficient=yaml.ReadDouble("simulation","relaxation_coefficient");
     this->simConstants.relaxation_coefficient_scale=yaml.ReadDouble("simulation","relaxation_coefficient_scale");
+    this->simConstants.initial_scale=yaml.ReadDouble("simulation","initial_scale");
+
+
+    
 
     
     
