@@ -1,5 +1,10 @@
 #include "Writer.h"
 #include <filesystem>
+#include <sstream>
+#include <iomanip>
+#include <vector>
+
+// VTK Includes
 #include <vtkSmartPointer.h>
 #include <vtkPolyData.h>
 #include <vtkPoints.h>
@@ -8,199 +13,191 @@
 #include <vtkXMLPolyDataWriter.h>
 #include <vtkPointData.h>
 #include <vtkCellArray.h>
-#include <vtkInformation.h>
-#include <vtkCellData.h>
+
+
+
 Writer::Writer(Data *data) : AModule(data) {}
 std::string Writer::getModuleName() { return "Writer"; };
 
 void Writer::Initialization()
 {
-  namespace fs = std::filesystem;
-  const std::string dir = "data";
-  // Remove directory if it exists
-  if (fs::exists(dir))
-  {
-    fs::remove_all(dir);
-  }
-  // Create new directory
-  fs::create_directory(dir);
-  
+    namespace fs = std::filesystem;
+    const std::string dir = "data";
+    // Using fs::create_directories handles creation even if parent directories don't exist.
+    // However, the original logic was to clean the directory, so we keep that.
+    
+    if (fs::exists(dir))
+    {
+        fs::remove_all(dir);
+    }
+    fs::create_directory(dir);
 }
 
 void Writer::Processing()
 {
-  if (!data->WRITE_RESULTS)
-    return;
 
-  int N = data->PARTICLE_COUNT;
-  auto POSITION = Kokkos::create_mirror_view(data->POSITION);
-  auto VELOCITY = Kokkos::create_mirror_view(data->VELOCITY);  
-  auto RADIUS = Kokkos::create_mirror_view(data->RADIUS);
-  auto NN_COUNT = Kokkos::create_mirror_view(data->NN_COUNT);
-  auto NN_IDS = Kokkos::create_mirror_view(data->NN_IDS);
-  auto FIX = Kokkos::create_mirror_view(data->FIX);
-  auto MAX_OVERLAP=Kokkos::create_mirror_view(data->MAX_OVERLAP);
-  Kokkos::deep_copy(POSITION, data->POSITION);
-  Kokkos::deep_copy(VELOCITY, data->VELOCITY);
+    if (data->WRITE_RESULTS || (data->simConstants.maxOverlap<data->simConstants.overlap_limit))
+        {
 
-  Kokkos::deep_copy(RADIUS, data->RADIUS);
+    const int N = data->PARTICLE_COUNT;
+    const int MIN_COORD_NUM = 3; // Filter threshold for stable particles
 
-  Kokkos::deep_copy(NN_COUNT, data->NN_COUNT);
-  Kokkos::deep_copy(NN_IDS, data->NN_IDS);
-  Kokkos::deep_copy(FIX, data->FIX);
-  Kokkos::deep_copy(MAX_OVERLAP, data->MAX_OVERLAP);
+    // --- 1. Copy Data from Device to Host Mirrors (Consolidated) ---
+    // Using auto& for mirrors for clarity.
+    auto POSITION = Kokkos::create_mirror_view(data->POSITION);
+    auto RADIUS = Kokkos::create_mirror_view(data->RADIUS);
+    auto NN_COUNT = Kokkos::create_mirror_view(data->NN_COUNT);
+    auto NN_IDS = Kokkos::create_mirror_view(data->NN_IDS);
+    auto FIX = Kokkos::create_mirror_view(data->FIX);
+    auto MAX_OVERLAP = Kokkos::create_mirror_view(data->MAX_OVERLAP);
 
-  auto polyData = vtkSmartPointer<vtkPolyData>::New();
-
-  // Create VTK objects
-  auto cells = vtkSmartPointer<vtkCellArray>::New();
-  auto points = vtkSmartPointer<vtkPoints>::New();
-  points->SetDataTypeToDouble();
-
-
-  auto velArray = vtkSmartPointer<vtkDoubleArray>::New();
-  velArray->SetName("VELOCITY");
-  velArray->SetNumberOfComponents(3);
-  velArray->SetNumberOfTuples(N);
-
-  auto radiusArray = vtkSmartPointer<vtkDoubleArray>::New();
-  radiusArray->SetName("RADIUS");
-  radiusArray->SetNumberOfComponents(1);
-  radiusArray->SetNumberOfTuples(N);
-  auto MAX_OVERLAPArray = vtkSmartPointer<vtkDoubleArray>::New();
-  MAX_OVERLAPArray->SetName("MAX_OVERLAP");
-  MAX_OVERLAPArray->SetNumberOfComponents(1);
-  MAX_OVERLAPArray->SetNumberOfTuples(N);
-
-  auto nnCountArray = vtkSmartPointer<vtkIntArray>::New();
-  nnCountArray->SetName("NN_COUNT");
-  nnCountArray->SetNumberOfComponents(1);
-  nnCountArray->SetNumberOfTuples(N);
-
-  auto fixArray = vtkSmartPointer<vtkIntArray>::New();
-  fixArray->SetName("FIX");
-  fixArray->SetNumberOfComponents(1);
-  fixArray->SetNumberOfTuples(N);
-
-  auto coordNRArray = vtkSmartPointer<vtkIntArray>::New();
-  coordNRArray->SetName("COORDINATION_NUMBER");
-  coordNRArray->SetNumberOfComponents(1);
-  coordNRArray->SetNumberOfTuples(N);
-
-
-  for (int i = 0; i < N; ++i)
-  {
+    Kokkos::deep_copy(POSITION, data->POSITION);
+    Kokkos::deep_copy(RADIUS, data->RADIUS);
+    Kokkos::deep_copy(NN_IDS, data->NN_IDS);
+    Kokkos::deep_copy(FIX, data->FIX);
+    Kokkos::deep_copy(MAX_OVERLAP, data->MAX_OVERLAP);
     
-    Vec3 pos = POSITION(i);
-    points->InsertNextPoint(pos.x, pos.y, pos.z);
-    Vec3 vel = VELOCITY(i);
-    velArray->SetTuple3(i, vel.x, vel.y, vel.z);
-   
-    radiusArray->SetValue(i, RADIUS(i));
-   
-    nnCountArray->SetValue(i, NN_COUNT(i));
-    fixArray->SetValue(i, FIX(i));
-   MAX_OVERLAPArray->SetValue(i,MAX_OVERLAP(i));
-    // cells->InsertNextCell(1);
-    // cells->InsertCellPoint(i);
-  }
-    // polyData->SetVerts(cells);
-std::vector<int> cnumber(N,0);
-  for(int i=0;i<N;i++)
-  {
-    int kiekis=NN_COUNT[i];
-    Vec3 P1=POSITION(i);
-    double R1=RADIUS(i);
-    for(int z=0;z<kiekis;z++)
+    // --- 2. Calculate Coordination Number (Z) ---
+    std::vector<int> cnumber(N, 0);
+    for (int i = 0; i < N; ++i)
     {
-      int pid=NN_IDS[i*data->simConstants.NN_MAX+z];
-      if(i>=pid)continue;
-      Vec3 P2=POSITION(pid);
-      double R2=RADIUS(pid);
-      double overlapas=R1+R2-(P1-P2).length();
-      if(overlapas>-data->simConstants.maxOverlap)
-      {
-        cells->InsertNextCell(2);
-        cells->InsertCellPoint(i);
-        cells->InsertCellPoint(pid);
-        cnumber[i]++;
-        cnumber[pid]++;
+        int kiekis = NN_COUNT(i); // Use operator() for Kokkos view mirrors
+        Vec3 P1 = POSITION(i);
+        double R1 = RADIUS(i);
 
-      }
+        for (int z = 0; z < kiekis; ++z)
+        {
+            int pid = NN_IDS(i * data->simConstants.NN_MAX + z);
+            
+            // Only calculate for i < pid to count each bond once
+            if (i >= pid)
+                continue;
+
+            Vec3 P2 = POSITION(pid);
+            double R2 = RADIUS(pid);
+            double distance = (P1 - P2).length();
+            double overlapas = R1 + R2 - distance;
+            
+            // Bond condition check
+            if (overlapas > -data->simConstants.maxOverlap)
+            {
+                cnumber[i]++;
+                cnumber[pid]++;
+            }
+        }
     }
-  }
 
-    for(int i=0;i<N;i++)
-  {
-    coordNRArray->SetTuple1(i,cnumber[i]);
-  }
+    // --- 3. Filter Particles and Create Index Map ---
+    std::vector<int> old_to_new_index(N, -1);
+    std::vector<int> particles_to_keep;
+    int N_filtered = 0;
 
-  polyData->SetLines(cells);
-  polyData->SetPoints(points);
+    for (int i = 0; i < N; ++i)
+    {
+        if (cnumber[i] >= MIN_COORD_NUM)
+        {
+            particles_to_keep.push_back(i);
+            old_to_new_index[i] = N_filtered;
+            N_filtered++;
+        }
+    }
 
-  polyData->GetPointData()->SetScalars(radiusArray);
-  polyData->GetPointData()->SetVectors(velArray);
-  polyData->GetPointData()->AddArray(nnCountArray);
-  polyData->GetPointData()->AddArray(fixArray);
-  polyData->GetPointData()->AddArray(MAX_OVERLAPArray);
-  polyData->GetPointData()->AddArray(coordNRArray);
+    // --- 4. Initialize and Populate VTK Objects with Filtered Data ---
+    auto polyData = vtkSmartPointer<vtkPolyData>::New();
+    auto cells = vtkSmartPointer<vtkCellArray>::New();
+    auto points = vtkSmartPointer<vtkPoints>::New();
+    points->SetDataTypeToDouble();
+    points->SetNumberOfPoints(N_filtered); // Set size immediately
 
-  Vec3 min = data->WALL_MIN;
-  Vec3 max = data->WALL_MAX;
-  auto boxPoints = vtkSmartPointer<vtkPoints>::New();
-  boxPoints->InsertNextPoint(min.x, min.y, min.z); // 0
-  boxPoints->InsertNextPoint(max.x, min.y, min.z); // 1
-  boxPoints->InsertNextPoint(max.x, max.y, min.z); // 2
-  boxPoints->InsertNextPoint(min.x, max.y, min.z); // 3
-  boxPoints->InsertNextPoint(min.x, min.y, max.z); // 4
-  boxPoints->InsertNextPoint(max.x, min.y, max.z); // 5
-  boxPoints->InsertNextPoint(max.x, max.y, max.z); // 6
-  boxPoints->InsertNextPoint(min.x, max.y, max.z); // 7
-  // 6 faces of the box as quads
-  int faces[6][4] = {
-      {0, 1, 2, 3}, // bottom
-      {4, 5, 6, 7}, // top
-      {0, 1, 5, 4}, // front
-      {1, 2, 6, 5}, // right
-      {2, 3, 7, 6}, // back
-      {3, 0, 4, 7}  // left
-  };
-  auto quads = vtkSmartPointer<vtkCellArray>::New();
-  for (int i = 0; i < 6; ++i)
-  {
-    vtkIdType pts[4] = {faces[i][0], faces[i][1], faces[i][2], faces[i][3]};
-    quads->InsertNextCell(4, pts);
-  }
-  auto boxPoly = vtkSmartPointer<vtkPolyData>::New();
-  boxPoly->SetPoints(boxPoints);
-  boxPoly->SetPolys(quads);
+    // Lambda to create and configure a VTK array (DRY Principle)
+    auto create_array = [&](const char* name, int components) {
+        auto arr = vtkSmartPointer<vtkDoubleArray>::New();
+        arr->SetName(name);
+        arr->SetNumberOfComponents(components);
+        arr->SetNumberOfTuples(N_filtered);
+        return arr;
+    };
+    // Lambda for Int Array
+    auto create_int_array = [&](const char* name, int components) {
+        auto arr = vtkSmartPointer<vtkIntArray>::New();
+        arr->SetName(name);
+        arr->SetNumberOfComponents(components);
+        arr->SetNumberOfTuples(N_filtered);
+        return arr;
+    };
 
-  // // Save as VTU
-  std::stringstream stepParticles;
-  stepParticles << "data/PARTICLES_" << std::setfill('0') << std::setw(10) << this->data->cstep << ".vtp";
-  std::stringstream stepBox;
-  stepBox << "data/BOX_" << std::setfill('0') << std::setw(10) << this->data->cstep << ".vtp";
+    auto radiusArray = create_array("RADIUS", 1);
+    auto MAX_OVERLAPArray = create_array("MAX_OVERLAP", 1);
+    auto fixArray = create_int_array("FIX", 1);
+    auto coordNRArray = create_int_array("COORDINATION_NUMBER", 1);
 
-  vtkSmartPointer<vtkXMLPolyDataWriter> writerParticles = vtkSmartPointer<vtkXMLPolyDataWriter>::New();
-  writerParticles->SetFileName(stepParticles.str().c_str());
-  writerParticles->SetInputData(polyData);
-  writerParticles->Write();
+    // Populate filtered arrays
+    for (int j = 0; j < N_filtered; ++j)
+    {
+        int i = particles_to_keep[j]; // Original index
 
-  vtkSmartPointer<vtkXMLPolyDataWriter> writerBox = vtkSmartPointer<vtkXMLPolyDataWriter>::New();
-  writerBox->SetFileName(stepBox.str().c_str());
-  writerBox->SetInputData(boxPoly);
-  writerBox->Write();
+        // Use SetPoint and SetTupleX methods for efficiency when size is known
+        Vec3 pos = POSITION(i);
+        points->SetPoint(j, pos.x, pos.y, pos.z);
+        radiusArray->SetValue(j, RADIUS(i));
+        fixArray->SetValue(j, FIX(i));
+        MAX_OVERLAPArray->SetValue(j, MAX_OVERLAP(i));
+        coordNRArray->SetValue(j, cnumber[i]); // Use SetValue/SetTuple1
+    }
 
-  std::stringstream stepVTM;
-  stepVTM << "data/OUTPUT_" << std::setfill('0') << std::setw(10) << this->data->cstep << ".vtm";
+    // --- 5. Recalculate and Insert Bonds (Lines/Cells) with New Indices ---
+    for (int i = 0; i < N; ++i)
+    {
+        if (old_to_new_index[i] != -1) // If particle i was kept
+        {
+            int new_i = old_to_new_index[i];
+            
+            // Loop through neighbors (NN_IDS is the original neighbor list)
+            for (int z = 0; z < NN_COUNT(i); ++z)
+            {
+                int pid = NN_IDS(i * data->simConstants.NN_MAX + z);
+                
+                // Check if neighbor (pid) was kept AND avoid double counting (i < pid)
+                if (old_to_new_index[pid] != -1 && i < pid)
+                {
+                    int new_pid = old_to_new_index[pid];
+                    
+                    // Recalculate overlap for safety (or reuse the logic from step 2 if possible)
+                    double distance = (POSITION(i) - POSITION(pid)).length();
+                    double overlapas = RADIUS(i) + RADIUS(pid) - distance;
 
-  std::fstream vtmFile(stepVTM.str(), std::ios::out);
-  vtmFile << "<?xml version=\"1.0\"?>\n";
-  vtmFile << "<VTKFile type=\"vtkMultiBlockDataSet\" version=\"1.0\" byte_order=\"LittleEndian\" header_type=\"UInt32\" compressor=\"vtkZLibDataCompressor\">\n";
-  vtmFile << "  <vtkMultiBlockDataSet>\n";
-  vtmFile << "    <DataSet index=\"0\" name=\"MAIN\" file=\"" << "PARTICLES_" << std::setfill('0') << std::setw(10) << this->data->cstep << ".vtp" << "\"/>\n";
-  vtmFile << "    <DataSet index=\"1\" name=\"WALLS\" file=\"" << "BOX_" << std::setfill('0') << std::setw(10) << this->data->cstep << ".vtp" << "\"/>\n";
-  vtmFile << "  </vtkMultiBlockDataSet>\n";
-  vtmFile << "</VTKFile>\n";
-  vtmFile.close();
+                    if (overlapas > -data->simConstants.maxOverlap)
+                    {
+                        cells->InsertNextCell(2);
+                        cells->InsertCellPoint(new_i); // Filtered index
+                        cells->InsertCellPoint(new_pid); // Filtered index
+                    }
+                }
+            }
+        }
+    }
+
+    // --- 6. Final VTK Setup and Write ---
+    polyData->SetLines(cells);
+    polyData->SetPoints(points);
+
+    // Add Point Data Arrays
+    polyData->GetPointData()->SetScalars(radiusArray);
+    polyData->GetPointData()->AddArray(fixArray);
+    polyData->GetPointData()->AddArray(MAX_OVERLAPArray);
+    polyData->GetPointData()->AddArray(coordNRArray);
+
+    // Write to file
+    std::stringstream stepParticles;
+    stepParticles << "data/PARTICLES_" 
+                  << std::setfill('0') << std::setw(10) << this->data->cstep << ".vtp";
+    
+    auto writerParticles = vtkSmartPointer<vtkXMLPolyDataWriter>::New();
+    writerParticles->SetFileName(stepParticles.str().c_str());
+    writerParticles->SetInputData(polyData);
+    // Use try/catch or status check for robust file writing in production code
+    writerParticles->Write(); 
+    }
+
+
 }

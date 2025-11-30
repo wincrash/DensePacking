@@ -48,7 +48,7 @@ void Reader::Initialization()
   data->VELOCITY = Kokkos::View<Vec3 *>("VELOCITY", data->PARTICLE_COUNT);
   data->NN_COUNT = Kokkos::View<int *>("NN_COUNT", data->PARTICLE_COUNT);
   data->FIX = Kokkos::View<int *>("FIX", data->PARTICLE_COUNT);
-data->MAX_OVERLAP = Kokkos::View<double *>("MAX_OVERLAP", data->PARTICLE_COUNT);
+  data->MAX_OVERLAP = Kokkos::View<double *>("MAX_OVERLAP", data->PARTICLE_COUNT);
   
   
   auto POSITION_host = Kokkos::create_mirror_view(data->POSITION);
@@ -73,15 +73,6 @@ data->MAX_OVERLAP = Kokkos::View<double *>("MAX_OVERLAP", data->PARTICLE_COUNT);
     double p[3];
     points->GetPoint(i, p);
     double r = radiusArray->GetTuple1(i);
-    r=r*data->simConstants.initial_scale;
-    POSITION_host(i) = Vec3(p[0], p[1], p[2]);
-
-    RADIUS_host(i) = r;
-    OLD_RADIUS_host(i) = r;
-    if (r < min_radius)
-      min_radius = r;
-    if (r > max_radius)
-      max_radius = r;
 
     if (polyData->GetPointData()->HasArray("FIX"))
     {
@@ -91,6 +82,19 @@ data->MAX_OVERLAP = Kokkos::View<double *>("MAX_OVERLAP", data->PARTICLE_COUNT);
     {
       FIX_host(i) = 0;
     }
+
+    
+    if(FIX_host(i)==0)r=r*data->simConstants.initial_scale;
+    POSITION_host(i) = Vec3(p[0], p[1], p[2]);
+
+    RADIUS_host(i) = r;
+    OLD_RADIUS_host(i) = r;
+    if (r < min_radius)
+      min_radius = r;
+    if (r > max_radius)
+      max_radius = r;
+
+
   }
 
   std::cout << "Min radius: " << min_radius << ", Max radius: " << max_radius << std::endl;
@@ -105,7 +109,7 @@ data->MAX_OVERLAP = Kokkos::View<double *>("MAX_OVERLAP", data->PARTICLE_COUNT);
   Kokkos::deep_copy(data->POSITION, POSITION_host);
   Kokkos::deep_copy(data->RADIUS, RADIUS_host);
   Kokkos::deep_copy(data->OLD_RADIUS, OLD_RADIUS_host);
-    Kokkos::deep_copy(data->VELOCITY, VELOCITY_host);
+  Kokkos::deep_copy(data->VELOCITY, VELOCITY_host);
   Kokkos::deep_copy(data->FIX, FIX_host);
 }
 

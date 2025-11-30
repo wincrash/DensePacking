@@ -9,9 +9,9 @@ Generate two filled disks of particle centers (spheres) at z=minz and z=maxz
 and write to packInput.vtk (legacy VTK POLYDATA with verts and a point-data
 array 'radius' containing particle radius).
 
-This version fills each circular cross-section (disk) using a hexagonal
-(/triangular) lattice so the disk interior is populated with particle
-centers rather than only the circumference.
+This version fills each circular cross-section (disk) using a simple
+rectangular (Cartesian) grid so the disk interior is populated with
+particle centers arranged regularly.
 
 Usage:
     python GenCylinderInitial.py --minz 0 --maxz 10 --cylradius 5 --pradius 0.2
@@ -25,39 +25,25 @@ from vtk import (
     vtkPolyDataWriter,
 )
 
-def make_disk_points(z, cyl_radius, particle_radius):
-    """
-    Fill a disk (circle) in the XY plane at height z with particle centers.
-    Uses a hexagonal (triangular) lattice for near-uniform dense packing:
-      - horizontal spacing dx = 2*r
-      - vertical spacing   dy = sqrt(3)*r
-    Centers are trimmed so particle surfaces remain inside cyl_radius.
-    """
-    R = max(0.0, cyl_radius - particle_radius)  # allowed center radius
-    pts = []
-    if R <= 0.0:
-        pts.append((0.0, 0.0, float(z)))
-        return pts
+def make_disk_points(z, cyl_radius, particle_radius,dir):
+    pts=[]
+    ilgis=2*cyl_radius
+    kiekis=int(ilgis/(2*particle_radius))
+    print(kiekis)
+    newR=ilgis/kiekis
+    newR=particle_radius
 
-    dx = 2.0 * particle_radius
-    dy = math.sqrt(3.0) * particle_radius
+    for i in range(kiekis):
+        for j in range(kiekis):
+            x=-cyl_radius+i*2*newR+newR
+            y=-cyl_radius+j*2*newR+newR
+            a=math.sqrt(x*x+y*y)
+            if a<cyl_radius:
+                pts.append([x,y,z+newR*dir])
+            
 
-    j = 0
-    # iterate rows from -R to +R
-    y = -R
-    eps = 1e-12
-    while y <= R + eps:
-        # offset every other row for hexagonal packing
-        row_offset = (j % 2) * (dx / 2.0)
-        # maximum x for this y to stay inside disk of radius R
-        max_x = math.sqrt(max(0.0, R * R - y * y))
-        x = -max_x + row_offset
-        while x <= max_x + eps:
-            if x * x + y * y <= R * R + eps:
-                pts.append((x, y, float(z)))
-            x += dx
-        j += 1
-        y += dy
+
+    
     return pts
 
 def build_polydata(all_points, particle_radius):
@@ -94,9 +80,6 @@ def parse_args(argv):
     p.add_argument("--maxz", type=float, required=True, help="maximum z value")
     p.add_argument("--cylradius", type=float, required=True, help="cylinder radius")
     p.add_argument("--pradius", type=float, required=True, help="particle radius (sphere radius)")
-    p.add_argument("--out", type=str, default="packInput.vtk", help="output VTK filename (default packInput.vtk)")
-    p.add_argument("--shuffle", action="store_true", help="randomize the order of particles in the output file")
-    p.add_argument("--seed", type=int, default=None, help="optional integer seed for reproducible shuffling")
     return p.parse_args(argv)
 
 def main(argv):
@@ -106,8 +89,9 @@ def main(argv):
     if args.cylradius < 0 or args.pradius <= 0:
         raise SystemExit("Error: radii must be positive (cylradius >= 0, pradius > 0)")
 
-    pts_min = make_disk_points(args.minz+args.pradius, args.cylradius, args.pradius)
-    pts_max = make_disk_points(args.maxz-args.pradius, args.cylradius, args.pradius)
+    # Place disks exactly at minz and maxz (no offset by particle radius)
+    pts_min = make_disk_points(args.minz, args.cylradius, args.pradius,1)
+    pts_max = make_disk_points(args.maxz, args.cylradius, args.pradius,-1)
 
     all_pts = pts_min + pts_max
     # optionally randomize output order
@@ -117,8 +101,8 @@ def main(argv):
         random.shuffle(all_pts)
 
     poly = build_polydata(all_pts, args.pradius)
-    write_vtk(poly, args.out)
-    print("Wrote", args.out, "with", len(all_pts), "particle centers.")
+    write_vtk(poly)
+    print("Wrote", "with", len(all_pts), "particle centers.")
 
 if __name__ == "__main__":
     main(sys.argv[1:])

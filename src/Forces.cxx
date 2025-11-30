@@ -92,15 +92,15 @@ void Forces::RunKernels()
       if (maxas < h_ij)
         maxas = h_ij;
     }
-    // double h_ij = (Kokkos::sqrt(P1.x * P1.x + P1.y * P1.y) + RADIUS1) - CYLINDER_RADIUS;
-    // if (h_ij > 0)
-    // {
-    //   Vec3 n_ij = Vec3(-P1.x, -P1.y, 0);
-    //   Vec3 d = n_ij * h_ij * simConstants.relaxation_coefficient;
-    //   DISP = DISP + d;
-    //   if (maxas < h_ij)
-    //     maxas = h_ij;
-    // }
+    double h_ij = (Kokkos::sqrt(P1.x * P1.x + P1.y * P1.y) + RADIUS1) - CYLINDER_RADIUS;
+    if (h_ij > 0)
+    {
+      Vec3 n_ij = Vec3(-P1.x, -P1.y, 0);
+      Vec3 d = n_ij * h_ij * simConstants.relaxation_coefficient;
+      DISP = DISP + d;
+      if (maxas < h_ij)
+        maxas = h_ij;
+    }
 
 
     VELOCITY(idx) = DISP;

@@ -48,16 +48,13 @@ def find_column(df, candidates):
     return None
 
 
-def plot(x, y, xlabel, ylabel, outpath):
-    plt.figure(figsize=(8, 4.5))
-    plt.plot(x, y, marker='o', linestyle='-', markersize=4)
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(outpath)
-    plt.close()
-    print('Saved', outpath)
+def plot_on_axes(ax, x, y, xlabel, ylabel, ylog=False):
+    ax.plot(x, y, marker='o', linestyle='-', markersize=4)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    if ylog:
+        ax.set_yscale('log')
+    ax.grid(True)
 
 
 def main(csv_path):
@@ -77,24 +74,76 @@ def main(csv_path):
 
     outdir = os.path.dirname(csv_path)
 
-    # Prepare and plot each requested series, dropping rows with NaN in either column
-    def plot_series(candidates, ylabel, outname):
+    # Prepare numeric columns for plotting
+    def get_series(candidates):
         col = find_column(df, candidates)
         if col is None:
-            print(f'{ylabel} column not found; skipping {outname}', file=sys.stderr)
-            return
+            return None, None
         sub = df[[step_col, col]].copy()
         sub[step_col] = pd.to_numeric(sub[step_col], errors='coerce')
         sub[col] = pd.to_numeric(sub[col], errors='coerce')
         sub = sub.dropna()
         if sub.empty:
-            print(f'No numeric data for {col}; skipping {outname}', file=sys.stderr)
-            return
-        plot(sub[step_col].values, sub[col].values, 'STEP', ylabel, os.path.join(outdir, outname))
+            return None, None
+        return sub[step_col].values, sub[col].values
 
-    plot_series(['OVERLAP', 'overlap'], 'Overlap', 'overlap_vs_step.png')
-    plot_series(['R_SCALE_DELTA', 'r_scale_delta', 'RADIUS_SCALE_DELTA', 'radius_scale_delta'], 'R_SCALE_DELTA', 'r_scale_delta_vs_step.png')
-    plot_series(['RELAX_COEFF', 'relax_coeff', 'RELAXATION_COEFFICIENT', 'relaxation_coefficient'], 'RELAX_COEFF', 'relax_coeff_vs_step.png')
+    # Collect series
+    overlap_x, overlap_y = get_series(['OVERLAP', 'overlap'])
+    rscale_x, rscale_y = get_series(['R_SCALE_DELTA', 'r_scale_delta', 'RADIUS_SCALE_DELTA', 'radius_scale_delta'])
+    relax_x, relax_y = get_series(['RELAX_COEFF', 'relax_coeff', 'RELAXATION_COEFFICIENT', 'relaxation_coefficient'])
+
+    # Create a single 2x2 figure
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+    ax_list = axes.flatten()
+
+    # overlap linear
+    ax = ax_list[0]
+    if overlap_x is not None:
+        plot_on_axes(ax, overlap_x, overlap_y, 'STEP', 'Overlap (linear)', ylog=False)
+    else:
+        ax.text(0.5, 0.5, 'No OVERLAP data', ha='center', va='center')
+        ax.set_xlabel('STEP')
+        ax.set_ylabel('Overlap (linear)')
+
+    # overlap log
+    ax = ax_list[1]
+    if overlap_x is not None:
+        # filter positive y values for log plot
+        mask = overlap_y > 0
+        if mask.any():
+            plot_on_axes(ax, overlap_x[mask], overlap_y[mask], 'STEP', 'Overlap (log y)', ylog=True)
+        else:
+            ax.text(0.5, 0.5, 'No positive OVERLAP values', ha='center', va='center')
+            ax.set_xlabel('STEP')
+            ax.set_ylabel('Overlap (log y)')
+    else:
+        ax.text(0.5, 0.5, 'No OVERLAP data', ha='center', va='center')
+        ax.set_xlabel('STEP')
+        ax.set_ylabel('Overlap (log y)')
+
+    # R_SCALE_DELTA
+    ax = ax_list[2]
+    if rscale_x is not None:
+        plot_on_axes(ax, rscale_x, rscale_y, 'STEP', 'R_SCALE_DELTA', ylog=False)
+    else:
+        ax.text(0.5, 0.5, 'No R_SCALE_DELTA data', ha='center', va='center')
+        ax.set_xlabel('STEP')
+        ax.set_ylabel('R_SCALE_DELTA')
+
+    # RELAX_COEFF
+    ax = ax_list[3]
+    if relax_x is not None:
+        plot_on_axes(ax, relax_x, relax_y, 'STEP', 'RELAX_COEFF', ylog=False)
+    else:
+        ax.text(0.5, 0.5, 'No RELAX_COEFF data', ha='center', va='center')
+        ax.set_xlabel('STEP')
+        ax.set_ylabel('RELAX_COEFF')
+
+    plt.tight_layout()
+    outname = os.path.join(outdir, 'timers_charts.png')
+    fig.savefig(outname)
+    plt.close(fig)
+    print('Saved', outname)
 
 
 if __name__ == '__main__':
