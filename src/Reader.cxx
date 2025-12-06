@@ -40,9 +40,24 @@ void Reader::Initialization()
 
 
   vtkPoints *points = polyData->GetPoints();
-  vtkDataArray *radiusArray = polyData->GetPointData()->GetArray("RADIUS");
+  if (!points) {
+    std::cerr << "Reader::Initialization: input has no points. Aborting initialization.\n";
+    data->COMPUTE = false;
+    return;
+  }
+
+  vtkDataArray *radiusArray = nullptr;
+  if (polyData->GetPointData())
+    radiusArray = polyData->GetPointData()->GetArray("RADIUS");
+  if (!radiusArray) {
+    std::cerr << "Reader::Initialization: missing 'RADIUS' array in input. Aborting initialization.\n";
+    data->COMPUTE = false;
+    return;
+  }
   data->PARTICLE_COUNT = points->GetNumberOfPoints();
   data->POSITION = Kokkos::View<Vec3 *>("POSITION", data->PARTICLE_COUNT);
+  data->FORCE = Kokkos::View<Vec3 *>("FORCE", data->PARTICLE_COUNT);
+  
   data->RADIUS = Kokkos::View<double *>("RADIUS", data->PARTICLE_COUNT);
   data->OLD_RADIUS = Kokkos::View<double *>("OLD_RADIUS", data->PARTICLE_COUNT);
   data->VELOCITY = Kokkos::View<Vec3 *>("VELOCITY", data->PARTICLE_COUNT);
@@ -59,6 +74,7 @@ void Reader::Initialization()
 
   Kokkos::deep_copy(data->POSITION, Vec3{0.0, 0.0, 0.0});
   Kokkos::deep_copy(data->VELOCITY, Vec3{0.0, 0.0, 0.0});
+  Kokkos::deep_copy(data->FORCE, Vec3{0.0, 0.0, 0.0});
   Kokkos::deep_copy(data->NN_COUNT, 0);
   Kokkos::deep_copy(data->FIX, 0);
   Kokkos::deep_copy(data->RADIUS, 0);
@@ -96,8 +112,15 @@ void Reader::Initialization()
 
 
   }
-
+  
+  if (min_radius <= 0.0) {
+    std::cerr << "Reader::Initialization: non-positive min radius detected (" << min_radius << "). Aborting.\n";
+    data->COMPUTE = false;
+    return;
+  }
+  data->min_radius=min_radius;
   std::cout << "Min radius: " << min_radius << ", Max radius: " << max_radius << std::endl;
+  
   data->simConstants.NN_MAX = (int)(4.0 * 0.74 * (min_radius + max_radius * 1.1) * (min_radius + max_radius * 1.1) / (min_radius * min_radius)) +1;
   data->simConstants.NN_MAX=data->simConstants.NN_MAX*2;
   

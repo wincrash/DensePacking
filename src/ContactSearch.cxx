@@ -3,16 +3,18 @@
 
 KOKKOS_INLINE_FUNCTION int GetHash(const int x, const int y, const int z, const int HASH_TABLE_SIZE)
 {
-  unsigned long code = 0;
+  // Simple 3D integer hash that handles negative coordinates robustly.
+  // Use 64-bit unsigned mixing with large primes to avoid bit-twiddling
+  // on signed inputs which can produce unexpected results.
+  unsigned long ux = (unsigned long)(uint32_t)x;
+  unsigned long uy = (unsigned long)(uint32_t)y;
+  unsigned long uz = (unsigned long)(uint32_t)z;
 
-  for (unsigned long i = 0; i < (sizeof(unsigned long) * 8) / 3; ++i)
-  {
-    code |= ((x & ((unsigned long)1 << i)) << 2 * i) |
-            ((y & ((unsigned long)1 << i)) << (2 * i + 1)) |
-            ((z & ((unsigned long)1 << i)) << (2 * i + 2));
-  }
+  unsigned long code = ux * 73856093u;
+  code ^= uy * 19349663u;
+  code ^= uz * 83492791u;
 
-  return code % HASH_TABLE_SIZE;
+  return (int)(code % (unsigned long)HASH_TABLE_SIZE);
 }
 
 ContactSearch::ContactSearch(Data *data) : AModule(data) {}

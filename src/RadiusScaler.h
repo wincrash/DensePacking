@@ -11,4 +11,6 @@ public:
 
 protected:
   void Processing();
+  double radius_min=0;
+  int kiekis=0;
 };

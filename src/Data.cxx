@@ -20,6 +20,8 @@ void Data::initialize()
     this->simConstants.relaxation_coefficient_scale=yaml.ReadDouble("simulation","relaxation_coefficient_scale");
     this->simConstants.initial_scale=yaml.ReadDouble("simulation","initial_scale");
 
+    // DT will be computed analytically after reading particle radii (in Reader)
+
 
     
 

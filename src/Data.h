@@ -15,6 +15,7 @@ public:
   unsigned long total_steps=1000;
   unsigned long cstep = 0;
   bool COMPUTE = true;
+  double min_radius=0;
   bool CONTACT_SEARCH = true;
   bool WRITE_RESULTS = true;
   bool PRINT_TIMES = true;
@@ -31,6 +32,7 @@ public:
   Kokkos::View<int *> NN_COUNT;
   Kokkos::View<int *> NN_IDS;
   Kokkos::View<Vec3 *> VELOCITY;  
+  Kokkos::View<Vec3 *> FORCE;  
   Kokkos::View<int *> FIX;
   
 };

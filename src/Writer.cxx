@@ -35,12 +35,12 @@ void Writer::Initialization()
 
 void Writer::Processing()
 {
-
-    if (data->WRITE_RESULTS  )
+if(data->simConstants.maxOverlap>data->simConstants.overlap_limit)return;
+    //if (data->WRITE_RESULTS  )
         {
 
     const int N = data->PARTICLE_COUNT;
-    const int MIN_COORD_NUM = 3; // Filter threshold for stable particles
+    const int MIN_COORD_NUM = 0; // Filter threshold for stable particles
 
     // --- 1. Copy Data from Device to Host Mirrors (Consolidated) ---
     // Using auto& for mirrors for clarity.
@@ -132,6 +132,7 @@ void Writer::Processing()
     auto MAX_OVERLAPArray = create_array("MAX_OVERLAP", 1);
     auto fixArray = create_int_array("FIX", 1);
     auto coordNRArray = create_int_array("COORDINATION_NUMBER", 1);
+    
 
     // Populate filtered arrays
     for (int j = 0; j < N_filtered; ++j)
@@ -145,6 +146,7 @@ void Writer::Processing()
         fixArray->SetValue(j, FIX(i));
         MAX_OVERLAPArray->SetValue(j, MAX_OVERLAP(i));
         coordNRArray->SetValue(j, cnumber[i]); // Use SetValue/SetTuple1
+        
     }
 
     // --- 5. Recalculate and Insert Bonds (Lines/Cells) with New Indices ---
@@ -188,6 +190,7 @@ void Writer::Processing()
     polyData->GetPointData()->AddArray(fixArray);
     polyData->GetPointData()->AddArray(MAX_OVERLAPArray);
     polyData->GetPointData()->AddArray(coordNRArray);
+    
 
     // Write to file
     std::stringstream stepParticles;

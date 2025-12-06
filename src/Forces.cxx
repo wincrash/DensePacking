@@ -13,6 +13,7 @@ void Forces::Processing()
 
   RunKernels();
 }
+
 void Forces::RunKernels()
 {
   const auto simConstants = data->simConstants;
@@ -20,6 +21,7 @@ void Forces::RunKernels()
   const auto CYLINDER_RADIUS = data->cylinder_radius;
   auto &POSITION = data->POSITION;
   auto &RADIUS = data->RADIUS;
+  auto &FORCE = data->FORCE;
   auto &VELOCITY = data->VELOCITY;
   auto &NN_COUNT = data->NN_COUNT;
   auto &NN_IDS = data->NN_IDS;
@@ -35,6 +37,7 @@ void Forces::RunKernels()
     Vec3 P1 = POSITION(idx);
     double RADIUS1 = RADIUS(idx);
     double maxas = 0;
+    Vec3 F=Vec3(0,0,0);
 
     for (int i = 0; i < kiekis; i++)
     {
@@ -46,10 +49,15 @@ void Forces::RunKernels()
       n_ij = n_ij.normalize();
       if (h_ij < 0)
         continue;
-      Vec3 d = n_ij * h_ij * simConstants.relaxation_coefficient;
-      DISP = DISP + d;
+      //Vec3 d = n_ij * h_ij * simConstants.relaxation_coefficient;
       if (maxas < h_ij)
         maxas = h_ij;
+
+      //F=F+ n_ij * (STIFFNESS * h_ij);
+     // F=F+ Jega(VELOCITY(idx),VELOCITY(pid),h_ij,n_ij,DENSITY*4.0/3.0*3.14159265359*RADIUS1*RADIUS1*RADIUS1,DENSITY*4.0/3.0*3.14159265359*RADIUS2*RADIUS2*RADIUS2,STIFFNESS,COR);
+     F=F+n_ij*h_ij*simConstants.relaxation_coefficient;
+
+
     }
     for (int i = 0; i < 6; i++)
     {
@@ -87,8 +95,8 @@ void Forces::RunKernels()
 
       if (h_ij < 0)
         continue;
-      Vec3 d = n_ij * h_ij * simConstants.relaxation_coefficient;
-      DISP = DISP + d;
+
+F=F+n_ij*h_ij*simConstants.relaxation_coefficient;      //DISP = DISP + d;
       if (maxas < h_ij)
         maxas = h_ij;
     }
@@ -96,15 +104,15 @@ void Forces::RunKernels()
     if (h_ij > 0)
     {
       Vec3 n_ij = Vec3(-P1.x, -P1.y, 0);
-      Vec3 d = n_ij * h_ij * simConstants.relaxation_coefficient;
-      DISP = DISP + d;
-      if (maxas < h_ij)
+      //Vec3 d = n_ij * h_ij * simConstants.relaxation_coefficient;
+      //DISP = DISP + d;
+F=F+n_ij*h_ij*simConstants.relaxation_coefficient;      if (maxas < h_ij)
         maxas = h_ij;
     }
 
 
-    VELOCITY(idx) = DISP;
     MAX_OVERLAP(idx) = maxas;
+    VELOCITY(idx)=F;
     /////
   });
 }
