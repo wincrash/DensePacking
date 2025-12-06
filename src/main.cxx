@@ -82,7 +82,6 @@ int main(int argc, char *argv[])
     file << csvHeader.str();
     file.close();
 
-    modules[modules.size() - 1]->RunProcessing();
 
     while (data.COMPUTE)
     {

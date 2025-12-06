@@ -36,7 +36,7 @@ void Writer::Initialization()
 void Writer::Processing()
 {
 
-    if (data->WRITE_RESULTS || (data->simConstants.maxOverlap<data->simConstants.overlap_limit))
+    if (data->WRITE_RESULTS  )
         {
 
     const int N = data->PARTICLE_COUNT;
@@ -53,6 +53,8 @@ void Writer::Processing()
 
     Kokkos::deep_copy(POSITION, data->POSITION);
     Kokkos::deep_copy(RADIUS, data->RADIUS);
+    // NN_COUNT mirror must be populated from device as well — missing copy caused empty sets on GPU
+    Kokkos::deep_copy(NN_COUNT, data->NN_COUNT);
     Kokkos::deep_copy(NN_IDS, data->NN_IDS);
     Kokkos::deep_copy(FIX, data->FIX);
     Kokkos::deep_copy(MAX_OVERLAP, data->MAX_OVERLAP);
