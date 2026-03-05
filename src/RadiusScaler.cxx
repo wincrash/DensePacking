@@ -1,5 +1,4 @@
 #include "RadiusScaler.h"
-#include <Kokkos_StdAlgorithms.hpp>
 #include <iomanip>
 
 RadiusScaler::RadiusScaler(Data *data) : AModule(data) {}
@@ -25,16 +24,20 @@ void RadiusScaler::RunKernels()
   auto &FIX = data->FIX;
 
 
- if(data->simConstants.maxOverlap>data->simConstants.overlap_limit)return;
+  if (data->simConstants.maxOverlap > data->simConstants.overlap_limit)
+    return;
 
-kiekis++;
-radius_min += data->min_radius * data->simConstants.radius_scale_delta_current;
-kiekis++;
-auto K = kiekis;
+  // Advance the count of scaling steps once per call.
+  kiekis++;
  
  
 
-      std::cout<<data->cstep<<" Max overlap: "<<std::setprecision(5) << std::scientific<<data->simConstants.maxOverlap<<" "<<" radius_min " <<radius_min<<"\n";
+      // Update cumulative scale and compute radius_min from the baseline.
+      const double cumulative_scale = data->simConstants.radius_scale_delta_current;
+      radius_min = data->min_radius * (1.0 + cumulative_scale);
+
+      std::cout << data->cstep << " Max overlap: " << std::setprecision(5) << std::scientific << data->simConstants.maxOverlap
+            << " radius_min " << radius_min << "\n";
   ///i//f(data->cstep%100==0)
   {
     data->simConstants.radius_scale_delta_current += data->simConstants.radius_scale_delta;
@@ -43,12 +46,12 @@ auto K = kiekis;
     // Use a simple cumulative additive scale computed from simConstants.
     // This makes the radius change linear with the cumulative scale instead
     // of multiplying by a factor that grows with the iteration count.
-    const double cumulative_scale = data->simConstants.radius_scale_delta_current;
+    const double cumulative_scale_after = data->simConstants.radius_scale_delta_current;
 
     Kokkos::parallel_for("RadiusScaler", N, KOKKOS_LAMBDA(const int idx) {
       if (FIX(idx) > 0)
         return;
-      RADIUS(idx) = OLD_RADIUS(idx) * (1.0 + cumulative_scale);
+      RADIUS(idx) = OLD_RADIUS(idx) * (1.0 + cumulative_scale_after);
     });
   }
   Kokkos::fence();

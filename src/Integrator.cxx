@@ -1,5 +1,5 @@
 #include "Integrator.h"
-#include <Kokkos_StdAlgorithms.hpp>
+// removed unused Kokkos_StdAlgorithms include
 
 Integrator::Integrator(Data *data) : AModule(data) {}
 
@@ -15,7 +15,7 @@ void Integrator::Processing()
 }
 void Integrator::RunKernels()
 {
-  const auto simConstants = data->simConstants;
+  (void)0; // no local copy of simConstants needed here
   const int N = data->PARTICLE_COUNT;
   auto &POSITION = data->POSITION;
   auto &RADIUS = data->RADIUS;

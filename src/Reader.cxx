@@ -99,6 +99,17 @@ void Reader::Initialization()
       FIX_host(i) = 0;
     }
 
+    if (polyData->GetPointData()->HasArray("VELOCITY"))
+    {
+      double v[3];
+      polyData->GetPointData()->GetArray("VELOCITY")->GetTuple(i, v);
+      VELOCITY_host(i) = Vec3(v[0], v[1], v[2]);
+    }
+    else
+    {
+      VELOCITY_host(i) = Vec3{0.0, 0.0, 0.0};
+    }
+
     
     if(FIX_host(i)==0)r=r*data->simConstants.initial_scale;
     POSITION_host(i) = Vec3(p[0], p[1], p[2]);

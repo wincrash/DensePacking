@@ -31,6 +31,7 @@ void Writer::Initialization()
         fs::remove_all(dir);
     }
     fs::create_directory(dir);
+    Processing(); // Initial write to create the first file with initial conditions
 }
 
 void Writer::Processing()
